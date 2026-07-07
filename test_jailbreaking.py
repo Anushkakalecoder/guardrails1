@@ -15,31 +15,40 @@ agent = Agent(
     input_guardrails=[jailbreak_guardrail],
 )
 
+
 async def main():
+
+    print("Jailbreak Guardrail Test")
+    print("Type 'exit' to quit.\n")
 
     while True:
 
-        prompt = input("\nEnter Prompt : ")
+        prompt = input("Enter Prompt: ").strip()
+
+        if not prompt:
+            continue
 
         if prompt.lower() == "exit":
+            print("\nExiting...")
             break
 
         try:
 
-            result = await Runner.run(
+            await Runner.run(
                 agent,
                 prompt,
             )
 
-            print("\n ALLOWED")
-            print(result.final_output)
+            print("✅ ALLOWED")
 
         except InputGuardrailTripwireTriggered:
 
-            print("\n BLOCKED BY JAILBREAK GUARDRAIL")
+            print("🚫 BLOCKED BY JAILBREAK GUARDRAIL")
 
         except Exception as e:
 
-            print(e)
+            print(f"Unexpected Error: {e}")
 
-asyncio.run(main())
+
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -1,54 +1,45 @@
 import asyncio
 
-from agents import (
-    Runner,
-    InputGuardrailTripwireTriggered,
-    OutputGuardrailTripwireTriggered,
-)
+from agents import Runner
+from agents.exceptions import InputGuardrailTripwireTriggered
 
-from guardrails import (
-    test_agent,
-    MEDICAL_ADVICE_REFUSAL,
+from medi_advice import (
+    cra_agent,
 )
 
 
 async def main():
 
+    print("Medical Guardrail Test")
     print("Type 'exit' to quit.\n")
 
     while True:
 
         query = input("Enter your message: ").strip()
 
+        if not query:
+            continue
+
         if query.lower() == "exit":
             print("\nExiting...")
             break
 
         try:
-            result = await Runner.run(test_agent, query)
 
-            print("\nAGENT:", result.final_output)
+            await Runner.run(
+                cra_agent,
+                query,
+            )
 
-        except InputGuardrailTripwireTriggered as exc:
+            print("✅ ALLOWED")
 
-            print("\n🚫 BLOCKED (Input Guardrail)")
-            print(exc)
+        except InputGuardrailTripwireTriggered:
 
-            print("\nResponse:")
-            print(MEDICAL_ADVICE_REFUSAL)
+            print("🚫 BLOCKED")
 
-        except OutputGuardrailTripwireTriggered as exc:
+        except Exception as e:
 
-            print("\n🚫 BLOCKED (Output Guardrail)")
-            print(exc)
-
-            print("\nResponse:")
-            print(MEDICAL_ADVICE_REFUSAL)
-
-        except Exception as exc:
-
-            print("\nUnexpected Error:")
-            print(exc)
+            print(f"Unexpected Error: {e}")
 
 
 if __name__ == "__main__":

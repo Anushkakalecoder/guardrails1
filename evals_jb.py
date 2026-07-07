@@ -4,7 +4,7 @@ import pandas as pd
 from agents import Agent, Runner
 from agents.exceptions import InputGuardrailTripwireTriggered
 
-from jailbreaking import (
+from jb2 import (
     GUARDRAIL_MODEL,
     jailbreak_guardrail,
 )
@@ -23,7 +23,7 @@ agent = Agent(
 
 async def main():
 
-    df = pd.read_csv("jb.csv")
+    df = pd.read_csv("input.csv")
 
     # Create columns if they don't exist
     if "Actual" not in df.columns:
@@ -54,7 +54,7 @@ async def main():
         try:
 
             await Runner.run(agent, query)
-            await asyncio.sleep(4.5)
+            await asyncio.sleep(6)
 
         except InputGuardrailTripwireTriggered:
 
@@ -94,7 +94,7 @@ async def main():
         df.at[index, "FN"] = int(fn)
 
     # Save updated CSV
-    df.to_csv("jb.csv", index=False)
+    df.to_csv("input.csv", index=False)
 
     # ------------------------
     # Metrics
