@@ -31,11 +31,11 @@ async def main():
                 query,
             )
 
-            print("✅ ALLOWED")
+            print(" ALLOWED")
 
         except InputGuardrailTripwireTriggered:
 
-            print("🚫 BLOCKED")
+            print(" BLOCKED")
 
         except Exception as e:
 

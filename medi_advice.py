@@ -10,7 +10,6 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
-from agents import OpenAIChatCompletionsModel
 from agents import (
     Agent,
     Runner,
@@ -25,20 +24,13 @@ from agents import (
 load_dotenv()
 set_tracing_disabled(True)
 
-client = AsyncOpenAI(
-    api_key=os.getenv("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1",
-)
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
-GUARDRAIL_MODEL = OpenAIChatCompletionsModel(
-    model="openai/gpt-oss-120b",
-    openai_client=client,
-)
+GUARDRAIL_MODEL = "gpt-5"
+
 
 logger = logging.getLogger("guardrails")
 logging.basicConfig(level=logging.INFO)
-
-MEDICAL_CONFIDENCE_THRESHOLD = 0.60
 
 MEDICAL_ADVICE_REFUSAL = (
     "I'm not able to provide medical diagnoses, treatment plans, or medication "
@@ -77,22 +69,29 @@ def _get_prompt(section: str, key: str) -> str:
 MEDICAL_INPUT_CLASSIFIER_PROMPT = _get_prompt("guardrails", "medical_advice_input_classifier")
 CRA_ASSISTANT_PROMPT = _get_prompt("agents", "cra_assistant")
 
+MEDICAL_CONFIDENCE_THRESHOLD = (
+    (_PROMPTS.get("thresholds") or {}).get("medical_confidence_threshold", 0.60)
+)
 
-# ==========================================================
-# Fast Regex Medical-Advice Detection
-# ==========================================================
 
-_MEDICAL_FAST_PATTERNS = [
-    r"how many (mg|milligrams|pills|tablets) of \w+ (should|can) i (take|use)",
-    r"what dose(age)? of \w+ should i",
-    r"diagnose (me|my)",
-    r"do i have (cancer|covid|a tumor|diabetes|an std|hiv)",
-    r"is it safe (for me|to) (take|mix) \w+ (with|and) \w+",
-    r"prescribe me",
-    r"what (medication|medicine|drug) should i (take|use)",
-]
+def _compile_pattern_list(section: str, key: str) -> re.Pattern:
+    """Load a list of regex strings from config, validate each one compiles
+    individually (so one bad pattern gives a clear error, not a silent
+    combined-regex failure), and return a single compiled OR'd pattern."""
+    patterns = (_PROMPTS.get(section) or {}).get(key)
+    if not patterns:
+        raise ValueError(f"No patterns found under '{section}.{key}' in {PROMPTS_PATH}")
 
-_MEDICAL_FAST_RE = re.compile("|".join(_MEDICAL_FAST_PATTERNS), re.IGNORECASE)
+    for p in patterns:
+        try:
+            re.compile(p)
+        except re.error as exc:
+            raise ValueError(f"Invalid regex in {PROMPTS_PATH} [{section}.{key}]: {p!r} ({exc})")
+
+    return re.compile("|".join(patterns), re.IGNORECASE)
+
+
+_MEDICAL_FAST_RE = _compile_pattern_list("patterns", "medical_fast_regex")
 
 
 def _extract_text(value: Any) -> str:
@@ -122,7 +121,7 @@ _medical_input_classifier = Agent(
 
 
 # ==========================================================
-#  STEP 2 — GUARDRAIL FUNCTION
+# ✅ STEP 2 — GUARDRAIL FUNCTION
 # Only the input guardrail remains — no output/hallucination
 # guardrails, since we're only enforcing this on the way in.
 # ==========================================================
@@ -187,15 +186,18 @@ def _medical_blocked(verdict: dict) -> bool:
 # ==========================================================
 # ✅ STEP 3 — MAIN AGENT
 # This is the actual CRA assistant the user talks to.
+# It's defined at MODULE level (not inside main()) so other
+# scripts can `from jb2 import cra_agent` and run it directly.
 # It goes here — AFTER the guardrail function is defined
 # because it references it in input_guardrails.
 # ==========================================================
 
 cra_agent = Agent(
-        name="CRA Assistant",
-        instructions=CRA_ASSISTANT_PROMPT,
-        model=GUARDRAIL_MODEL,
-        input_guardrails=[
-            medical_advice_input_guardrail,   # ← blocks personal advice requests
-        ],
-    )
+    name="CRA Assistant",
+    instructions=CRA_ASSISTANT_PROMPT,
+    model=GUARDRAIL_MODEL,
+    input_guardrails=[
+        medical_advice_input_guardrail,   # ← blocks personal advice requests
+    ],
+)
+

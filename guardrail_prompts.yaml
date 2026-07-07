@@ -1,3 +1,23 @@
+
+patterns:
+  jailbreak_regex:
+    - "ignore (all |any |previous |prior |the above |earlier )*instructions"
+    - "forget (all |any |previous |prior |the above |earlier )*instructions"
+    - "disregard (all |any |previous |prior |your )*(instructions|rules|guidelines)"
+    - "you are (now|DAN|no longer bound)"
+    - "\\bDAN\\b.{0,20}\\bmode\\b"
+    - "act as (an? )?(unrestricted|unfiltered|jailbroken|uncensored)"
+    - "pretend (you have no|there are no) (restrictions|rules|guidelines|filters)"
+    - "reveal (your )?(system prompt|system message|hidden instructions)"
+    - "what (is|are) your (system prompt|instructions|guidelines)"
+    - "bypass (your )?(safety|content) (filter|guidelines|restrictions)"
+    - "do anything now"
+    - "developer mode"
+    - "\\bsudo\\b.{0,15}\\boverride\\b"
+ 
+thresholds:
+  jailbreak_confidence_threshold: 0.60
+
 guardrails:
   jailbreak_classifier: |-
     You are a security classifier.

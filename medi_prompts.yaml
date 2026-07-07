@@ -1,3 +1,16 @@
+patterns:
+  medical_fast_regex:
+    - "how many (mg|milligrams|pills|tablets) of \\w+ (should|can) i (take|use)"
+    - "what dose(age)? of \\w+ should i"
+    - "diagnose (me|my)"
+    - "do i have (cancer|covid|a tumor|diabetes|an std|hiv)"
+    - "is it safe (for me|to) (take|mix) \\w+ (with|and) \\w+"
+    - "prescribe me"
+    - "what (medication|medicine|drug) should i (take|use)"
+ 
+thresholds:
+  medical_confidence_threshold: 0.60
+  
 guardrails:
   medical_advice_input_classifier: |-
     You are a clinical-safety classifier for a Clinical Research Associate (CRA) Assistant.

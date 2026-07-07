@@ -4,7 +4,7 @@ import pandas as pd
 from agents import Agent, Runner
 from agents.exceptions import InputGuardrailTripwireTriggered
 
-from jb2 import (
+from jailbreaking import (
     GUARDRAIL_MODEL,
     jailbreak_guardrail,
 )

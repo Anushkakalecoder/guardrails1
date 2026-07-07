@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 import json
-from agents import OpenAIChatCompletionsModel
+
 
 load_dotenv()
 
@@ -23,51 +23,70 @@ from agents import (
     RunContextWrapper,
     TResponseInputItem,
     input_guardrail,
-    OpenAIChatCompletionsModel,
     set_tracing_disabled,
 )
 set_tracing_disabled(True)
-client = AsyncOpenAI(
-    api_key=os.getenv("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1",
-)
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
-GUARDRAIL_MODEL = OpenAIChatCompletionsModel(
-    model="openai/gpt-oss-120b",
-    openai_client=client,
-)
+GUARDRAIL_MODEL = "gpt-5"
 logger = logging.getLogger("guardrails")
 logging.basicConfig(level=logging.INFO)
-JAILBREAK_CONFIDENCE_THRESHOLD = 0.60
 
 
 # ==========================================================
-# Load system prompt(s) from YAML instead of hardcoding them
+# Load system prompt(s), regex patterns, and thresholds from
+# YAML instead of hardcoding them
 # ==========================================================
 
 PROMPTS_PATH = os.getenv("GUARDRAIL_PROMPTS_PATH", "guardrail_prompts.yaml")
 
 
-def _load_prompt(key: str, path: str = PROMPTS_PATH) -> str:
-    """Load a named prompt from the guardrail_prompts.yaml file.
+def _load_config(path: str = PROMPTS_PATH) -> dict:
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+_CONFIG = _load_config()
+
+
+def _load_prompt(key: str) -> str:
+    """Load a named prompt from guardrail_prompts.yaml.
 
     Expected file shape:
         guardrails:
           jailbreak_classifier: |-
             <instructions text>
     """
-    with open(path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-
-    prompt = (data.get("guardrails") or {}).get(key)
+    prompt = (_CONFIG.get("guardrails") or {}).get(key)
     if not prompt:
         raise ValueError(
-            f"Prompt '{key}' not found under 'guardrails:' in {path}"
+            f"Prompt '{key}' not found under 'guardrails:' in {PROMPTS_PATH}"
         )
     return prompt
 
 
+def _compile_pattern_list(section: str, key: str) -> re.Pattern:
+    """Load a list of regex strings from config, validate each one compiles
+    individually (so one bad pattern gives a clear error, not a silent
+    combined-regex failure), and return a single compiled OR'd pattern."""
+    patterns = (_CONFIG.get(section) or {}).get(key)
+    if not patterns:
+        raise ValueError(f"No patterns found under '{section}.{key}' in {PROMPTS_PATH}")
+
+    for p in patterns:
+        try:
+            re.compile(p)
+        except re.error as exc:
+            raise ValueError(f"Invalid regex in {PROMPTS_PATH} [{section}.{key}]: {p!r} ({exc})")
+
+    return re.compile("|".join(patterns), re.IGNORECASE)
+
+
 JAILBREAK_CLASSIFIER_PROMPT = _load_prompt("jailbreak_classifier")
+
+JAILBREAK_CONFIDENCE_THRESHOLD = (
+    (_CONFIG.get("thresholds") or {}).get("jailbreak_confidence_threshold", 0.60)
+)
 
 
 @dataclass
@@ -174,30 +193,12 @@ def _parse_json_output(raw: str) -> dict:
 
 
 # ==========================================================
-# Fast Regex Jailbreak Detection
+# Fast Regex Jailbreak Detection (patterns loaded from YAML)
 # ==========================================================
 
-_JAILBREAK_PATTERNS = [
-    r"ignore (all |any |previous |prior |the above |earlier )*instructions",
-    r"forget (all |any |previous |prior |the above |earlier )*instructions",
-    r"disregard (all |any |previous |prior |your )*(instructions|rules|guidelines)",
-    r"you are (now|DAN|no longer bound)",
-    r"\bDAN\b.{0,20}\bmode\b",
-    r"act as (an? )?(unrestricted|unfiltered|jailbroken|uncensored)",
-    r"pretend (you have no|there are no) (restrictions|rules|guidelines|filters)",
-    r"reveal (your )?(system prompt|system message|hidden instructions)",
-    r"what (is|are) your (system prompt|instructions|guidelines)",
-    r"bypass (your )?(safety|content) (filter|guidelines|restrictions)",
-    r"do anything now",
-    r"developer mode",
-    r"\bsudo\b.{0,15}\boverride\b",
-]
+_JAILBREAK_RE = _compile_pattern_list("patterns", "jailbreak_regex")
 
 
-_JAILBREAK_RE = re.compile(
-    "|".join(_JAILBREAK_PATTERNS),
-    re.IGNORECASE
-)
 #------------------------------------------------------------
 #another class to hold the output of the jailbreak check
 #----------------------------------------------------------------

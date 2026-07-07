@@ -39,11 +39,11 @@ async def main():
                 prompt,
             )
 
-            print("✅ ALLOWED")
+            print(" ALLOWED")
 
         except InputGuardrailTripwireTriggered:
 
-            print("🚫 BLOCKED BY JAILBREAK GUARDRAIL")
+            print(" BLOCKED BY JAILBREAK GUARDRAIL")
 
         except Exception as e:
 
